@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/microcks/microcks-cli/pkg/config"
@@ -30,28 +29,40 @@ microcks logout dev-context`,
 			}
 
 			context := args[0]
-			localCfg, err := config.ReadLocalConfig(globalClientOpts.ConfigPath)
-			errors.CheckError(err)
-			if localCfg == nil {
-				log.Fatalf("Nothing to logout from")
-			}
-
-			// Remove authToken
-			ok := localCfg.RemoveToken(context)
-			if !ok {
-				log.Fatalf("Context %s does not exist", context)
-			}
-
-			err = config.ValidateLocalConfig(*localCfg)
+			err := logoutContext(context, globalClientOpts.ConfigPath)
 			if err != nil {
-				log.Fatalf("Error in loging out: %s", err)
+				fmt.Printf("Error logging out from '%s': %v\n", context, err)
+				os.Exit(1)
 			}
-			err = config.WriteLocalConfig(*localCfg, globalClientOpts.ConfigPath)
-			errors.CheckError(err)
-
 			fmt.Printf("Logged out from '%s'\n", context)
 		},
 	}
 
 	return logoutCmd
+}
+
+func logoutContext(context, configPath string) error {
+	localCfg, err := config.ReadLocalConfig(configPath)
+	errors.CheckError(err)
+	if localCfg == nil {
+		return fmt.Errorf("Nothing to logout from")
+	}
+
+	tokenOwner := context
+	resolvedCtx, err := localCfg.ResolveContext(context)
+	if err == nil {
+		tokenOwner = resolvedCtx.User.Name
+	}
+
+	ok := localCfg.RemoveToken(tokenOwner)
+	if !ok {
+		return fmt.Errorf("Context %s does not exist", context)
+	}
+
+	err = config.ValidateLocalConfig(*localCfg)
+	if err != nil {
+		return fmt.Errorf("Error in loging out: %s", err)
+	}
+
+	return config.WriteLocalConfig(*localCfg, configPath)
 }
