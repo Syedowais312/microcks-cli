@@ -17,6 +17,7 @@
 package connectors
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -269,5 +270,196 @@ func TestGetFullTestResultChecksStatusBeforeParsing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "HTTP 404") {
 		t.Fatalf("error %q does not mention HTTP 404", err.Error())
+	}
+}
+
+func TestListServicesFetchesServicesEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/services" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("page"); got != "1" {
+			t.Fatalf("unexpected page: %s", got)
+		}
+		if got := r.URL.Query().Get("size"); got != "25" {
+			t.Fatalf("unexpected size: %s", got)
+		}
+		if err := json.NewEncoder(w).Encode([]Service{{
+			ID:      "svc-1",
+			Name:    "Catalog API",
+			Version: "1.0.0",
+			Type:    "REST",
+		}}); err != nil {
+			t.Fatalf("failed to encode services response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewMicrocksClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewMicrocksClient returned error: %v", err)
+	}
+	services, err := client.ListServices(1, 25)
+	if err != nil {
+		t.Fatalf("ListServices returned error: %v", err)
+	}
+	if len(services) != 1 || services[0].ID != "svc-1" {
+		t.Fatalf("unexpected services: %#v", services)
+	}
+}
+
+func TestGetServiceResolvesNameVersionReference(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/services":
+			if err := json.NewEncoder(w).Encode([]Service{{
+				ID:      "svc-1",
+				Name:    "Catalog API",
+				Version: "1.0.0",
+				Type:    "REST",
+			}}); err != nil {
+				t.Fatalf("failed to encode services response: %v", err)
+			}
+		case "/api/services/svc-1":
+			if err := json.NewEncoder(w).Encode(ServiceDetail{
+				Service: Service{
+					ID:      "svc-1",
+					Name:    "Catalog API",
+					Version: "1.0.0",
+					Type:    "REST",
+				},
+			}); err != nil {
+				t.Fatalf("failed to encode service detail response: %v", err)
+			}
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewMicrocksClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewMicrocksClient returned error: %v", err)
+	}
+	detail, err := client.GetService("Catalog API:1.0.0")
+	if err != nil {
+		t.Fatalf("GetService returned error: %v", err)
+	}
+	if detail.Service.ID != "svc-1" {
+		t.Fatalf("unexpected service detail: %#v", detail)
+	}
+}
+
+func TestGetServiceResolvesNameVersionAcrossPages(t *testing.T) {
+	firstPage := make([]Service, serviceLookupPageSize)
+	for i := range firstPage {
+		firstPage[i] = Service{
+			ID:      "filler",
+			Name:    "Other API",
+			Version: "1.0.0",
+			Type:    "REST",
+		}
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/services":
+			if got := r.URL.Query().Get("size"); got != "100" {
+				t.Fatalf("unexpected size: %s", got)
+			}
+			switch r.URL.Query().Get("page") {
+			case "0":
+				if err := json.NewEncoder(w).Encode(firstPage); err != nil {
+					t.Fatalf("failed to encode first page response: %v", err)
+				}
+			case "1":
+				if err := json.NewEncoder(w).Encode([]Service{{
+					ID:      "svc-2",
+					Name:    "Catalog API",
+					Version: "1.0.0",
+					Type:    "REST",
+				}}); err != nil {
+					t.Fatalf("failed to encode second page response: %v", err)
+				}
+			default:
+				t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
+			}
+		case "/api/services/svc-2":
+			if err := json.NewEncoder(w).Encode(ServiceDetail{
+				Service: Service{
+					ID:      "svc-2",
+					Name:    "Catalog API",
+					Version: "1.0.0",
+					Type:    "REST",
+				},
+			}); err != nil {
+				t.Fatalf("failed to encode service detail response: %v", err)
+			}
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewMicrocksClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewMicrocksClient returned error: %v", err)
+	}
+	detail, err := client.GetService("Catalog API:1.0.0")
+	if err != nil {
+		t.Fatalf("GetService returned error: %v", err)
+	}
+	if detail.Service.ID != "svc-2" {
+		t.Fatalf("unexpected service detail: %#v", detail)
+	}
+}
+
+func TestListTestResultsFetchesTestsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tests" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("serviceId"); got != "svc-1" {
+			t.Fatalf("unexpected serviceId: %s", got)
+		}
+		if err := json.NewEncoder(w).Encode([]TestResultSummary{{
+			ID:        "test-1",
+			ServiceID: "svc-1",
+			Success:   true,
+		}}); err != nil {
+			t.Fatalf("failed to encode test results response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewMicrocksClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewMicrocksClient returned error: %v", err)
+	}
+	results, err := client.ListTestResults("svc-1", 0, 50)
+	if err != nil {
+		t.Fatalf("ListTestResults returned error: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "test-1" {
+		t.Fatalf("unexpected test results: %#v", results)
+	}
+}
+
+func TestGetFullTestResultClassifiesNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "missing", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client, err := NewMicrocksClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewMicrocksClient returned error: %v", err)
+	}
+	_, err = client.GetFullTestResult("missing")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if got := microckserrors.KindOf(err); got != microckserrors.KindNotFound {
+		t.Fatalf("KindOf = %v, want KindNotFound", got)
 	}
 }
