@@ -107,18 +107,21 @@ func TestRedactSensitiveContent(t *testing.T) {
 	}
 }
 
-func captureStdout(f func()) string {
+func captureStdout(t testing.TB, f func()) string {
+	t.Helper()
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
 	os.Stdout = w
 
 	f()
 
-	_ = w.Close()
+	require.NoError(t, w.Close())
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
 	return buf.String()
 }
 
@@ -126,7 +129,8 @@ func TestDumpRequestAndResponseIfRequired(t *testing.T) {
 	oldVerbose := Verbose
 	defer func() { Verbose = oldVerbose }()
 
-	req, _ := http.NewRequest("GET", "http://example.com?access_token=some_token", nil)
+	req, err := http.NewRequest("GET", "http://example.com?access_token=some_token", nil)
+	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer sensitive")
 
 	resp := &http.Response{
@@ -141,19 +145,19 @@ func TestDumpRequestAndResponseIfRequired(t *testing.T) {
 
 	// 1. Verbose = false
 	Verbose = false
-	outputReq := captureStdout(func() {
+	outputReq := captureStdout(t, func() {
 		DumpRequestIfRequired("test-req", req, false)
 	})
 	assert.Empty(t, outputReq)
 
-	outputResp := captureStdout(func() {
+	outputResp := captureStdout(t, func() {
 		DumpResponseIfRequired("test-resp", resp, false)
 	})
 	assert.Empty(t, outputResp)
 
 	// 2. Verbose = true
 	Verbose = true
-	outputReq = captureStdout(func() {
+	outputReq = captureStdout(t, func() {
 		DumpRequestIfRequired("test-req", req, false)
 	})
 	assert.Contains(t, outputReq, "Dumping request 'test-req'")
@@ -161,7 +165,7 @@ func TestDumpRequestAndResponseIfRequired(t *testing.T) {
 	assert.Contains(t, outputReq, "access_token=[REDACTED]")
 	assert.NotContains(t, outputReq, "sensitive")
 
-	outputResp = captureStdout(func() {
+	outputResp = captureStdout(t, func() {
 		DumpResponseIfRequired("test-resp", resp, false)
 	})
 	assert.Contains(t, outputResp, "Dumping response 'test-resp'")
@@ -330,7 +334,8 @@ func TestLocalConfigCRUDAndValidation(t *testing.T) {
 	// Token removal
 	ok = loadedCfg.RemoveToken("usr1")
 	assert.True(t, ok)
-	u1Mod, _ := loadedCfg.GetUser("usr1")
+	u1Mod, err := loadedCfg.GetUser("usr1")
+	assert.NoError(t, err)
 	assert.Empty(t, u1Mod.AuthToken)
 	assert.Empty(t, u1Mod.RefreshToken)
 

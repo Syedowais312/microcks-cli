@@ -242,3 +242,32 @@ func TestCreateTestResultRejectsInvalidFilteredOperations(t *testing.T) {
 		t.Fatalf("KindOf = %v, want %v", got, microckserrors.KindUsage)
 	}
 }
+
+func TestGetFullTestResultChecksStatusBeforeParsing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tests/missing" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNotFound)
+		if _, err := w.Write([]byte("missing test result")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewMicrocksClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewMicrocksClient returned error: %v", err)
+	}
+
+	_, err = client.GetFullTestResult("missing")
+	if err == nil {
+		t.Fatal("GetFullTestResult returned nil error")
+	}
+	if got := microckserrors.KindOf(err); got != microckserrors.KindNotFound {
+		t.Fatalf("KindOf = %v, want %v", got, microckserrors.KindNotFound)
+	}
+	if !strings.Contains(err.Error(), "HTTP 404") {
+		t.Fatalf("error %q does not mention HTTP 404", err.Error())
+	}
+}
