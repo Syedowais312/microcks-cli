@@ -66,11 +66,13 @@ microcks [command] [flags]
 | `login`      | Log in to a Microcks instance using Keycloak credentials | [`login`](documentation/cmd/login.md)           |
 | `logout`     | Log out and remove authentication from a given context   | [`logout`](documentation/cmd/logout.md)         |
 | `context`    | Manage CLI contexts (list, use, delete)                  | [`context`](documentation/cmd/context.md)       |
+| `capabilities` | List machine-readable CLI capabilities                 | [`capabilities`](documentation/cmd/capabilities.md) |
 | `start`      | Start a local Microcks instance via Docker/Podman        | [`start`](documentation/cmd/start.md)           |
 | `stop`       | Stop a local Microcks instance                           | [`stop`](documentation/cmd/stop.md)             |
 | `import`     | Import API spec files from local filesystem              | [`import`](documentation/cmd/import.md)         |
 | `import-dir`  | Scan a directory and import API spec files.              | [`import-dir`](documentation/cmd/importDir.md)     |
 | `import-url` | Import API spec files directly from a remote URL         | [`import-url`](documentation/cmd/importUrl.md) |
+| `service`    | List and inspect Microcks services                       | [`service`](documentation/cmd/service.md)       |
 | `test`       | Run tests against a deployed API using selected runner   | [`test`](documentation/cmd/test.md)             |
 | `version`    | Print Microcks CLI version                               | [`version`](documentation/cmd/version.md)       |
 
