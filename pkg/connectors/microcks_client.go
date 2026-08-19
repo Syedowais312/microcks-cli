@@ -163,7 +163,6 @@ type microcksClient struct {
 	CertFile     *tls.Certificate
 	InsecureTLS  bool
 	RefreshToken string
-	Insecure     bool
 	Verbose      bool
 
 	httpClient *http.Client
@@ -194,7 +193,7 @@ func NewClient(opts ClientOptions) (MicrocksClient, error) {
 			return nil, err
 		}
 		c.ServerAddr = configCtx.Server.Server
-		c.Insecure = configCtx.Server.KeycloakEnable
+
 		c.InsecureTLS = configCtx.Server.InsecureTLS
 		c.AuthToken = configCtx.User.AuthToken
 		c.RefreshToken = configCtx.User.RefreshToken
